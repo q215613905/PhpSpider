@@ -334,15 +334,16 @@ class AliYunController extends SpiderController
         var_dump($token);
         if(strlen($token)!=32)return['parse'=>0,'url'=>""];
         [$ali_user, $this->access_token[$token]] = $this->refreshAccessToken($token);
+        var_dump($this->access_token[$token]);
         [$open_refresh_token, $open_access_token] = $this->openAuth($token);
         if (!$open_access_token) {
             $this->redis->del("c:ali:openAuth:" . $this->refresh_token);
             [$open_refresh_token, $open_access_token] = $this->openAuth($token);
         }
-        $this->drive_id[$token] = $ali_user['default_drive_id'];
+//        $this->drive_id[$token] = $ali_user['default_drive_id'];
+        $this->getDrive_id($token);
+        $this->drive_id[$token] = $this->getDrive_id($token)?:$ali_user['default_drive_id'];
         $this->open_access_token[$token] = $open_access_token;
-
-        #  echo $url;
 
 
         $obj = explode("~", $play);
@@ -350,6 +351,15 @@ class AliYunController extends SpiderController
         $shareid = explode("@@@", $urlArr)[0];
         $fid = explode("@@@", $urlArr)[1];
         if(!$fid)return [];
+        $flag=str_replace("2","",$flag);
+
+        //先访问缓存看看是否存在
+        if ($flag == "原画") {
+            if($this->redis->get("c:ali:getDownloadUrl:" . $fid))return ['parse'=>0,'url'=>$this->getDownloadUrl($fid)];
+        }else{
+            if($this->redis->get("c:ali:getPreviewUrl:" . $fid.":".$flag))return ['parse'=>0,'url'=>$this->getPreviewUrl($fid,$flag)];
+        }
+
         $result = [];
         [$this->share_token, $this->share_id] = $this->refreshShareToken($shareid);
         if (count($obj) > 1 && $obj[1]) {
@@ -371,7 +381,6 @@ class AliYunController extends SpiderController
         }
 
         $result['parse'] = "0";
-        $flag=str_replace("2","",$flag);
         if ($flag == "原画") {
             $url = $this->getDownloadUrl($fid);
             if (!$url) {
@@ -404,6 +413,16 @@ class AliYunController extends SpiderController
             $refresh_token = $token;
         }
         return $refresh_token;
+    }
+
+    /**
+     * @Cacheable(prefix="ali:getDrive_id", ttl=86400)
+     */
+    protected function getDrive_id($token)
+    {
+        $result = $this->okhttpStringJson("https://user.aliyundrive.com/v2/user/get", [], $this->header4(), "post");
+        $data=json_decode($result,true);
+        return $data['resource_drive_id']??($data['default_drive_id']?:"");
     }
 
     protected function removeExt($filename): string

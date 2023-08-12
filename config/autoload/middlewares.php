@@ -11,7 +11,6 @@ declare(strict_types=1);
  */
 $return=[
     'http' => [
-        \App\Middleware\CountMiddleware::class
     ],
 ];
 if(!env("SCAN_CACHEABLE")){
